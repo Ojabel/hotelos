@@ -1,0 +1,883 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  PROVISIONING
+  ARCHIVED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+  REVOKED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+enum RoomOperationalStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  DIRTY
+  CLEANING
+  INSPECTED
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum ReservationOperationalStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+  EXPIRED
+}
+
+enum HousekeepingTaskStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  AWAITING_INSPECTION
+  APPROVED
+}
+enum HousekeepingTaskType {
+  TURNOVER
+  DAILY
+  DEEP
+  MAINTENANCE_RETURN
+}
+enum OperationsPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+enum InspectionResult {
+  APPROVED
+  REJECTED
+}
+enum MaintenanceRequestStatus {
+  OPEN
+  CONVERTED
+  CLOSED
+}
+enum MaintenanceWorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  AWAITING_PARTS
+  COMPLETED
+  CLOSED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+model Organization {
+  id          String                   @id @default(uuid()) @db.Uuid
+  name        String                   @db.VarChar(200)
+  slug        String                   @unique @db.VarChar(100)
+  status      OrganizationStatus       @default(PROVISIONING)
+  hotels      Hotel[]
+  memberships OrganizationMembership[]
+  roles       Role[]
+  auditEvents AuditEvent[]
+  invitations MembershipInvitation[]
+  housekeepingTasks HousekeepingTask[]
+  housekeepingTaskEvents HousekeepingTaskEvent[]
+  housekeepingInspections HousekeepingInspection[]
+  maintenanceRequests MaintenanceRequest[]
+  maintenanceWorkOrders MaintenanceWorkOrder[]
+  maintenanceWorkOrderEvents MaintenanceWorkOrderEvent[]
+  guestIdentityLinks GuestIdentityLink[]
+  guestServiceRequests GuestServiceRequest[]
+  createdAt   DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime                 @updatedAt @db.Timestamptz(6)
+
+  @@index([status])
+}
+
+model Hotel {
+  id                         String             @id @default(uuid()) @db.Uuid
+  organizationId             String             @db.Uuid
+  name                       String             @db.VarChar(200)
+  code                       String             @db.VarChar(50)
+  status                     OrganizationStatus @default(PROVISIONING)
+  organization               Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  memberships                HotelMembership[]
+  roles                      Role[]
+  auditEvents                AuditEvent[]
+  roomCategories             RoomCategory[]
+  rooms                      HotelRoom[]
+  guests                     HotelGuest[]
+  reservations               HotelReservation[]
+  financialFolios            GuestFolio[]
+  financialExpenses          HotelExpense[]
+  financialExpenseCategories ExpenseCategory[]
+  housekeepingTasks           HousekeepingTask[]
+  housekeepingTaskEvents      HousekeepingTaskEvent[]
+  housekeepingInspections     HousekeepingInspection[]
+  maintenanceRequests         MaintenanceRequest[]
+  maintenanceWorkOrders       MaintenanceWorkOrder[]
+  maintenanceWorkOrderEvents  MaintenanceWorkOrderEvent[]
+  guestIdentityLinks GuestIdentityLink[]
+  guestServiceRequests GuestServiceRequest[]
+  createdAt                  DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+}
+
+model RoomCategory {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  hotelId          String             @db.Uuid
+  name             String             @db.VarChar(100)
+  description      String?            @db.VarChar(500)
+  basePrice        Int
+  capacity         Int
+  bedConfiguration String             @db.VarChar(200)
+  amenities        String[]           @default([])
+  hotel            Hotel              @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  rooms            HotelRoom[]
+  reservations     HotelReservation[]
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@unique([hotelId, id])
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, name])
+  @@index([organizationId, hotelId])
+}
+
+model HotelRoom {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  hotelId        String                @db.Uuid
+  categoryId     String                @db.Uuid
+  number         String                @db.VarChar(30)
+  floor          Int
+  status         RoomOperationalStatus @default(AVAILABLE)
+  hotel          Hotel                 @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  category       RoomCategory          @relation(fields: [organizationId, hotelId, categoryId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  reservations   HotelReservation[]
+  housekeepingTasks HousekeepingTask[]
+  housekeepingInspections HousekeepingInspection[]
+  maintenanceRequests MaintenanceRequest[]
+  createdAt      DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @db.Timestamptz(6)
+
+  @@unique([hotelId, number])
+  @@unique([organizationId, hotelId, id])
+  @@index([organizationId, hotelId, status])
+  @@index([organizationId, hotelId, categoryId])
+}
+
+model HotelGuest {
+  id              String             @id @default(uuid()) @db.Uuid
+  organizationId  String             @db.Uuid
+  hotelId         String             @db.Uuid
+  fullName        String             @db.VarChar(200)
+  email           String?            @db.VarChar(320)
+  phone           String?            @db.VarChar(50)
+  nationality     String?            @db.VarChar(100)
+  notes           String?            @db.VarChar(1000)
+  preferences     String[]           @default([])
+  hotel           Hotel              @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  reservations    HotelReservation[]
+  financialFolios GuestFolio[]
+  identityLinks   GuestIdentityLink[]
+  serviceRequests GuestServiceRequest[]
+  createdAt       DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@index([organizationId, hotelId, fullName])
+  @@index([organizationId, hotelId, email])
+}
+
+model HotelReservation {
+  id             String                       @id @default(uuid()) @db.Uuid
+  organizationId String                       @db.Uuid
+  hotelId        String                       @db.Uuid
+  roomId         String                       @db.Uuid
+  categoryId     String                       @db.Uuid
+  guestId        String                       @db.Uuid
+  reference      String                       @db.VarChar(40)
+  status         ReservationOperationalStatus @default(CONFIRMED)
+  checkIn        DateTime                     @db.Date
+  checkOut       DateTime                     @db.Date
+  adults         Int
+  children       Int                          @default(0)
+  nightlyRate    Int
+  total          Int
+  notes          String?                      @db.VarChar(1000)
+  idempotencyKey String?                      @db.VarChar(100)
+  hotel          Hotel                        @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  room           HotelRoom                    @relation(fields: [organizationId, hotelId, roomId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  category       RoomCategory                 @relation(fields: [organizationId, hotelId, categoryId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  guest          HotelGuest                   @relation(fields: [organizationId, hotelId, guestId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  createdAt      DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime                     @updatedAt @db.Timestamptz(6)
+  financialFolio GuestFolio?
+
+  @@unique([hotelId, id])
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, reference])
+  @@unique([hotelId, idempotencyKey])
+  @@index([organizationId, hotelId, checkIn, checkOut])
+  @@index([organizationId, hotelId, status, checkIn])
+  @@index([organizationId, hotelId, guestId])
+}
+
+model GuestIdentityLink {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  hotelId        String       @db.Uuid
+  guestId        String       @db.Uuid
+  identityId     String       @db.Uuid
+  linkedById     String?      @db.Uuid
+  linkMethod     String       @db.VarChar(40)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel          Hotel        @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  guest          HotelGuest   @relation(fields: [organizationId, hotelId, guestId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  identity       UserIdentity @relation("GuestIdentityLinkIdentity", fields: [identityId], references: [id], onDelete: Restrict)
+  linkedBy       UserIdentity? @relation("GuestIdentityLinkActor", fields: [linkedById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@unique([hotelId, identityId])
+  @@unique([hotelId, guestId])
+  @@index([organizationId, identityId])
+}
+
+model GuestServiceRequest {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  hotelId        String       @db.Uuid
+  guestId        String       @db.Uuid
+  category       String       @db.VarChar(80)
+  description    String       @db.VarChar(1000)
+  status         String       @default("PENDING") @db.VarChar(20)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel          Hotel        @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  guest          HotelGuest   @relation(fields: [organizationId, hotelId, guestId], references: [organizationId, hotelId, id], onDelete: Restrict)
+
+  @@unique([organizationId, hotelId, id])
+  @@index([organizationId, hotelId, guestId, createdAt])
+}
+
+enum FolioStatus {
+  OPEN
+  CLOSED
+}
+
+enum LedgerEntryKind {
+  ROOM_CHARGE
+  SERVICE_CHARGE
+  ADJUSTMENT
+  PAYMENT
+  REFUND
+}
+
+enum FinancialInvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum FinancialPaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+enum FinancialPaymentStatus {
+  RECORDED
+  REVERSED
+}
+
+enum FinancialRefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum ExpenseStatus {
+  PAID
+  PENDING
+  VOID
+}
+
+model GuestFolio {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  hotelId        String             @db.Uuid
+  guestId        String             @db.Uuid
+  reservationId  String             @db.Uuid
+  currency       String             @default("NGN") @db.Char(3)
+  status         FolioStatus        @default(OPEN)
+  hotel          Hotel              @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  guest          HotelGuest         @relation(fields: [organizationId, hotelId, guestId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  reservation    HotelReservation   @relation(fields: [organizationId, hotelId, reservationId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  entries        FolioEntry[]
+  invoices       FinancialInvoice[]
+  payments       FinancialPayment[]
+  refunds        FinancialRefund[]
+  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([organizationId, hotelId, reservationId])
+  @@index([organizationId, hotelId, guestId])
+}
+
+model FolioEntry {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  hotelId        String              @db.Uuid
+  folioId        String              @db.Uuid
+  kind           LedgerEntryKind
+  description    String              @db.VarChar(500)
+  amountMinor    Int
+  currency       String              @db.Char(3)
+  serviceDate    DateTime            @db.Date
+  reason         String?             @db.VarChar(1000)
+  idempotencyKey String?             @db.VarChar(100)
+  folio          GuestFolio          @relation(fields: [organizationId, hotelId, folioId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  allocations    PaymentAllocation[]
+  invoiceLines   InvoiceLine[]
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([folioId, idempotencyKey])
+  @@index([organizationId, hotelId, folioId, serviceDate])
+}
+
+model FinancialInvoice {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @db.Uuid
+  hotelId        String                 @db.Uuid
+  folioId        String                 @db.Uuid
+  reference      String                 @db.VarChar(40)
+  status         FinancialInvoiceStatus @default(ISSUED)
+  currency       String                 @db.Char(3)
+  subtotalMinor  Int
+  totalMinor     Int
+  snapshot       Json
+  issuedAt       DateTime               @default(now()) @db.Timestamptz(6)
+  folio          GuestFolio             @relation(fields: [organizationId, hotelId, folioId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  allocations    PaymentAllocation[]
+  lines          InvoiceLine[]
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, reference])
+  @@index([organizationId, hotelId, folioId, issuedAt])
+}
+
+model InvoiceLine {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  hotelId        String           @db.Uuid
+  invoiceId      String           @db.Uuid
+  folioEntryId   String           @db.Uuid
+  description    String           @db.VarChar(500)
+  amountMinor    Int
+  currency       String           @db.Char(3)
+  serviceDate    DateTime         @db.Date
+  invoice        FinancialInvoice @relation(fields: [organizationId, hotelId, invoiceId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  folioEntry     FolioEntry       @relation(fields: [organizationId, hotelId, folioEntryId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([invoiceId, folioEntryId])
+  @@index([organizationId, hotelId, invoiceId])
+}
+
+model FinancialPayment {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @db.Uuid
+  hotelId        String                 @db.Uuid
+  folioId        String                 @db.Uuid
+  reference      String                 @db.VarChar(40)
+  idempotencyKey String                 @db.VarChar(100)
+  method         FinancialPaymentMethod
+  status         FinancialPaymentStatus @default(RECORDED)
+  amountMinor    Int
+  allocatedMinor Int                    @default(0)
+  currency       String                 @db.Char(3)
+  receivedAt     DateTime               @default(now()) @db.Timestamptz(6)
+  folio          GuestFolio             @relation(fields: [organizationId, hotelId, folioId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  receipt        PaymentReceipt?
+  refunds        FinancialRefund[]
+  allocations    PaymentAllocation[]
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, reference])
+  @@unique([organizationId, hotelId, idempotencyKey])
+  @@index([organizationId, hotelId, folioId, receivedAt])
+}
+
+model PaymentAllocation {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  hotelId        String           @db.Uuid
+  paymentId      String           @db.Uuid
+  invoiceId      String           @db.Uuid
+  folioEntryId   String           @db.Uuid
+  amountMinor    Int
+  payment        FinancialPayment @relation(fields: [organizationId, hotelId, paymentId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  invoice        FinancialInvoice @relation(fields: [organizationId, hotelId, invoiceId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  folioEntry     FolioEntry       @relation(fields: [organizationId, hotelId, folioEntryId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@unique([paymentId, invoiceId])
+  @@index([organizationId, hotelId, invoiceId])
+}
+
+model PaymentReceipt {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  hotelId        String           @db.Uuid
+  paymentId      String           @unique @db.Uuid
+  reference      String           @db.VarChar(40)
+  snapshot       Json
+  issuedAt       DateTime         @default(now()) @db.Timestamptz(6)
+  payment        FinancialPayment @relation(fields: [organizationId, hotelId, paymentId], references: [organizationId, hotelId, id], onDelete: Restrict)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([organizationId, hotelId, paymentId])
+  @@unique([hotelId, reference])
+}
+
+model FinancialRefund {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  hotelId        String                @db.Uuid
+  folioId        String                @db.Uuid
+  paymentId      String                @db.Uuid
+  reference      String                @db.VarChar(40)
+  amountMinor    Int
+  currency       String                @db.Char(3)
+  reason         String                @db.VarChar(1000)
+  status         FinancialRefundStatus @default(PENDING)
+  idempotencyKey String                @db.VarChar(100)
+  requestedAt    DateTime              @default(now()) @db.Timestamptz(6)
+  processedAt    DateTime?             @db.Timestamptz(6)
+  folio          GuestFolio            @relation(fields: [organizationId, hotelId, folioId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  payment        FinancialPayment      @relation(fields: [organizationId, hotelId, paymentId], references: [organizationId, hotelId, id], onDelete: Restrict)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, reference])
+  @@unique([organizationId, hotelId, idempotencyKey])
+}
+
+model ExpenseCategory {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  hotelId        String         @db.Uuid
+  name           String         @db.VarChar(100)
+  hotel          Hotel          @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  expenses       HotelExpense[]
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, name])
+}
+
+model HotelExpense {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @db.Uuid
+  hotelId        String                 @db.Uuid
+  categoryId     String                 @db.Uuid
+  vendor         String                 @db.VarChar(200)
+  description    String                 @db.VarChar(500)
+  amountMinor    Int
+  currency       String                 @db.Char(3)
+  method         FinancialPaymentMethod
+  status         ExpenseStatus          @default(PAID)
+  reference      String?                @db.VarChar(100)
+  expenseDate    DateTime               @db.Date
+  hotel          Hotel                  @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  category       ExpenseCategory        @relation(fields: [organizationId, hotelId, categoryId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@index([organizationId, hotelId, expenseDate, categoryId])
+}
+
+model UserIdentity {
+  id              String                   @id @default(uuid()) @db.Uuid
+  issuer          String                   @db.VarChar(500)
+  subject         String                   @db.VarChar(500)
+  email           String?                  @db.VarChar(320)
+  emailVerified   Boolean                  @default(false)
+  memberships     OrganizationMembership[]
+  guestIdentityLinks GuestIdentityLink[] @relation("GuestIdentityLinkIdentity")
+  guestIdentityLinksCreated GuestIdentityLink[] @relation("GuestIdentityLinkActor")
+  sentInvitations MembershipInvitation[]
+  auditEvents     AuditEvent[]
+  createdHousekeepingTasks HousekeepingTask[] @relation("HousekeepingTaskCreator")
+  assignedHousekeepingTasks HousekeepingTask[] @relation("HousekeepingTaskAssignee")
+  housekeepingTaskEvents HousekeepingTaskEvent[]
+  housekeepingInspections HousekeepingInspection[]
+  reportedMaintenanceRequests MaintenanceRequest[] @relation("MaintenanceReporter")
+  createdMaintenanceWorkOrders MaintenanceWorkOrder[] @relation("MaintenanceWorkOrderCreator")
+  assignedMaintenanceWorkOrders MaintenanceWorkOrder[] @relation("MaintenanceWorkOrderAssignee")
+  maintenanceWorkOrderEvents MaintenanceWorkOrderEvent[]
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime                 @updatedAt @db.Timestamptz(6)
+
+  @@unique([issuer, subject])
+  @@index([email])
+}
+
+model OrganizationMembership {
+  id               String                       @id @default(uuid()) @db.Uuid
+  organizationId   String                       @db.Uuid
+  userId           String                       @db.Uuid
+  status           MembershipStatus             @default(INVITED)
+  isOwner          Boolean                      @default(false)
+  invitedAt        DateTime?                    @db.Timestamptz(6)
+  activatedAt      DateTime?                    @db.Timestamptz(6)
+  suspendedAt      DateTime?                    @db.Timestamptz(6)
+  revokedAt        DateTime?                    @db.Timestamptz(6)
+  organization     Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user             UserIdentity                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  hotelMemberships HotelMembership[]
+  roleAssignments  OrganizationMembershipRole[]
+  createdAt        DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                     @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, userId])
+  @@unique([organizationId, id])
+  @@index([userId, status])
+  @@index([organizationId, status])
+}
+
+model MembershipInvitation {
+  id              String                     @id @default(uuid()) @db.Uuid
+  organizationId  String                     @db.Uuid
+  email           String                     @db.VarChar(320)
+  invitedByUserId String                     @db.Uuid
+  status          InvitationStatus           @default(PENDING)
+  tokenHash       String?                    @unique @db.VarChar(64)
+  deliveryStatus  String                     @default("NOT_SENT") @db.VarChar(20)
+  deliveryError   String?                    @db.VarChar(80)
+  lastDeliveryAt  DateTime?                  @db.Timestamptz(6)
+  expiresAt       DateTime                   @db.Timestamptz(6)
+  acceptedAt      DateTime?                  @db.Timestamptz(6)
+  cancelledAt     DateTime?                  @db.Timestamptz(6)
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invitedBy       UserIdentity               @relation(fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  roles           MembershipInvitationRole[]
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, expiresAt])
+  @@index([organizationId, email])
+}
+
+model MembershipInvitationRole {
+  organizationId String               @db.Uuid
+  invitationId   String               @db.Uuid
+  roleId         String               @db.Uuid
+  invitation     MembershipInvitation @relation(fields: [organizationId, invitationId], references: [organizationId, id], onDelete: Cascade)
+  role           Role                 @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Restrict)
+
+  @@id([invitationId, roleId])
+  @@index([organizationId, roleId])
+}
+
+model HotelMembership {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  organizationId         String                 @db.Uuid
+  hotelId                String                 @db.Uuid
+  userId                 String                 @db.Uuid
+  status                 MembershipStatus       @default(INVITED)
+  activatedAt            DateTime?              @db.Timestamptz(6)
+  suspendedAt            DateTime?              @db.Timestamptz(6)
+  revokedAt              DateTime?              @db.Timestamptz(6)
+  organizationMembership OrganizationMembership @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+  hotel                  Hotel                  @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  roleAssignments        HotelMembershipRole[]
+  createdAt              DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime               @updatedAt @db.Timestamptz(6)
+
+  @@unique([hotelId, userId])
+  @@unique([organizationId, id])
+  @@index([organizationId, userId, status])
+  @@index([organizationId, hotelId, status])
+}
+
+model Role {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  organizationId      String                       @db.Uuid
+  hotelId             String?                      @db.Uuid
+  name                String                       @db.VarChar(100)
+  description         String?                      @db.VarChar(500)
+  isSystem            Boolean                      @default(false)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel               Hotel?                       @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  organizationMembers OrganizationMembershipRole[]
+  hotelMembers        HotelMembershipRole[]
+  permissions         RolePermission[]
+  invitations         MembershipInvitationRole[]
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime                     @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, hotelId, name])
+  @@index([organizationId, hotelId])
+}
+
+model OrganizationMembershipRole {
+  organizationId           String                 @db.Uuid
+  organizationMembershipId String                 @db.Uuid
+  roleId                   String                 @db.Uuid
+  membership               OrganizationMembership @relation(fields: [organizationId, organizationMembershipId], references: [organizationId, id], onDelete: Cascade)
+  role                     Role                   @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Cascade)
+  createdAt                DateTime               @default(now()) @db.Timestamptz(6)
+
+  @@id([organizationMembershipId, roleId])
+  @@index([organizationId, roleId])
+}
+
+model HotelMembershipRole {
+  organizationId    String          @db.Uuid
+  hotelMembershipId String          @db.Uuid
+  roleId            String          @db.Uuid
+  membership        HotelMembership @relation(fields: [organizationId, hotelMembershipId], references: [organizationId, id], onDelete: Cascade)
+  role              Role            @relation(fields: [organizationId, roleId], references: [organizationId, id], onDelete: Cascade)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+
+  @@id([hotelMembershipId, roleId])
+  @@index([organizationId, roleId])
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  resource    String           @db.VarChar(100)
+  action      String           @db.VarChar(100)
+  description String?          @db.VarChar(500)
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model AuditEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid
+  hotelId        String?       @db.Uuid
+  actorUserId    String?       @db.Uuid
+  correlationId  String        @db.VarChar(100)
+  action         String        @db.VarChar(150)
+  resource       String        @db.VarChar(150)
+  resourceId     String?       @db.VarChar(200)
+  outcome        AuditOutcome  @default(SUCCESS)
+  metadata       Json?
+  occurredAt     DateTime      @default(now()) @db.Timestamptz(6)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel          Hotel?        @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  actor          UserIdentity? @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, occurredAt])
+  @@index([hotelId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([correlationId])
+}
+
+model HousekeepingTask {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  organizationId     String                  @db.Uuid
+  hotelId            String                  @db.Uuid
+  roomId             String                  @db.Uuid
+  type               HousekeepingTaskType     @default(TURNOVER)
+  priority           OperationsPriority       @default(NORMAL)
+  status             HousekeepingTaskStatus   @default(PENDING)
+  dueAt              DateTime?                @db.Timestamptz(6)
+  instructions       String?                  @db.VarChar(2000)
+  notes              String?                  @db.VarChar(4000)
+  idempotencyKey     String?                  @db.VarChar(100)
+  createdByUserId    String                  @db.Uuid
+  assignedToUserId   String?                 @db.Uuid
+  startedByUserId    String?                 @db.Uuid
+  completedByUserId  String?                 @db.Uuid
+  startedAt          DateTime?                @db.Timestamptz(6)
+  completedAt        DateTime?                @db.Timestamptz(6)
+  approvedAt         DateTime?                @db.Timestamptz(6)
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel              Hotel                   @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  room               HotelRoom               @relation(fields: [organizationId, hotelId, roomId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  creator            UserIdentity            @relation("HousekeepingTaskCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  assignee           UserIdentity?           @relation("HousekeepingTaskAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict)
+  events             HousekeepingTaskEvent[]
+  inspections        HousekeepingInspection[]
+  createdAt          DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, idempotencyKey])
+  @@index([organizationId, hotelId, status, dueAt])
+  @@index([organizationId, hotelId, roomId, status])
+  @@index([organizationId, hotelId, assignedToUserId, status])
+}
+
+model HousekeepingTaskEvent {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @db.Uuid
+  hotelId        String                 @db.Uuid
+  taskId         String                 @db.Uuid
+  actorUserId    String                 @db.Uuid
+  action         String                 @db.VarChar(50)
+  fromStatus     HousekeepingTaskStatus?
+  toStatus       HousekeepingTaskStatus?
+  notes          String?                @db.VarChar(4000)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  task           HousekeepingTask       @relation(fields: [organizationId, hotelId, taskId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  actor          UserIdentity           @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel          Hotel                  @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, hotelId, taskId, createdAt])
+}
+
+model HousekeepingInspection {
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @db.Uuid
+  hotelId        String                  @db.Uuid
+  taskId         String                  @db.Uuid
+  roomId         String                  @db.Uuid
+  inspectorId    String                  @db.Uuid
+  result         InspectionResult
+  score          Int                     @default(100)
+  notes          String?                 @db.VarChar(4000)
+  inspectedAt    DateTime                @default(now()) @db.Timestamptz(6)
+  task           HousekeepingTask        @relation(fields: [organizationId, hotelId, taskId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  room           HotelRoom               @relation(fields: [organizationId, hotelId, roomId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  inspector      UserIdentity            @relation(fields: [inspectorId], references: [id], onDelete: Restrict)
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel          Hotel                   @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, hotelId, result, inspectedAt])
+}
+
+model MaintenanceRequest {
+  id               String                   @id @default(uuid()) @db.Uuid
+  organizationId   String                   @db.Uuid
+  hotelId          String                   @db.Uuid
+  roomId           String?                  @db.Uuid
+  title            String                   @db.VarChar(200)
+  description      String                   @db.VarChar(4000)
+  location         String?                  @db.VarChar(200)
+  category         String                   @db.VarChar(80)
+  priority         OperationsPriority       @default(NORMAL)
+  blocksRoom       Boolean                  @default(false)
+  status           MaintenanceRequestStatus @default(OPEN)
+  reportedByUserId String                   @db.Uuid
+  reportedAt       DateTime                 @default(now()) @db.Timestamptz(6)
+  notes            String?                  @db.VarChar(4000)
+  idempotencyKey   String?                  @db.VarChar(100)
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel            Hotel                    @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  room             HotelRoom?               @relation(fields: [organizationId, hotelId, roomId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  reporter         UserIdentity             @relation("MaintenanceReporter", fields: [reportedByUserId], references: [id], onDelete: Restrict)
+  workOrder        MaintenanceWorkOrder?
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                 @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([hotelId, idempotencyKey])
+  @@index([organizationId, hotelId, status, priority, reportedAt])
+  @@index([organizationId, hotelId, roomId])
+}
+
+model MaintenanceWorkOrder {
+  id                String                       @id @default(uuid()) @db.Uuid
+  organizationId    String                       @db.Uuid
+  hotelId           String                       @db.Uuid
+  requestId         String                       @unique @db.Uuid
+  status            MaintenanceWorkOrderStatus   @default(OPEN)
+  priority          OperationsPriority           @default(NORMAL)
+  assignedToUserId  String?                      @db.Uuid
+  createdByUserId   String                       @db.Uuid
+  dueAt             DateTime?                    @db.Timestamptz(6)
+  startedAt         DateTime?                    @db.Timestamptz(6)
+  completedAt       DateTime?                    @db.Timestamptz(6)
+  closedAt          DateTime?                    @db.Timestamptz(6)
+  resolution        String?                      @db.VarChar(4000)
+  notes             String?                      @db.VarChar(4000)
+  organization      Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel             Hotel                        @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+  request           MaintenanceRequest           @relation(fields: [organizationId, hotelId, requestId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  assignee          UserIdentity?                @relation("MaintenanceWorkOrderAssignee", fields: [assignedToUserId], references: [id], onDelete: Restrict)
+  creator           UserIdentity                 @relation("MaintenanceWorkOrderCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  events            MaintenanceWorkOrderEvent[]
+  createdAt         DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                     @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, hotelId, id])
+  @@unique([organizationId, hotelId, requestId])
+  @@index([organizationId, hotelId, status, priority, dueAt])
+  @@index([organizationId, hotelId, assignedToUserId, status])
+}
+
+model MaintenanceWorkOrderEvent {
+  id             String                    @id @default(uuid()) @db.Uuid
+  organizationId String                    @db.Uuid
+  hotelId        String                    @db.Uuid
+  workOrderId    String                    @db.Uuid
+  actorUserId    String                    @db.Uuid
+  action         String                    @db.VarChar(50)
+  fromStatus     MaintenanceWorkOrderStatus?
+  toStatus       MaintenanceWorkOrderStatus?
+  notes          String?                   @db.VarChar(4000)
+  createdAt      DateTime                  @default(now()) @db.Timestamptz(6)
+  workOrder      MaintenanceWorkOrder      @relation(fields: [organizationId, hotelId, workOrderId], references: [organizationId, hotelId, id], onDelete: Restrict)
+  actor          UserIdentity              @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  hotel          Hotel                     @relation(fields: [organizationId, hotelId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, hotelId, workOrderId, createdAt])
+}

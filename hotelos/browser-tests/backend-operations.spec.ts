@@ -1,0 +1,171 @@
+﻿import { expect, test } from '@playwright/test';
+
+const token = process.env.HOTEL_OS_DEV_TOKEN;
+const runId = `${Date.now()}`;
+const guestName = `Browser Guest ${runId}`;
+const email = `browser-${runId}@example.test`;
+const firstRoomNumber = `B${runId.slice(-4)}A`;
+const secondRoomNumber = `B${runId.slice(-4)}B`;
+const categoryName = `Browser Category ${runId}`;
+
+const isoDay = (offset: number) => {
+  const date = new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+};
+
+test('browser completes PostgreSQL room, guest, reservation, front-desk and housekeeping flow', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Staff sign in' })).toBeVisible();
+  await page.getByText('Local development sign-in').click();
+  await page.getByLabel('Short-lived backend token').fill(token!);
+  await page.getByRole('button', { name: 'Connect with development token' }).click();
+  await expect(page).toHaveURL(/\/(front-desk|dashboard|reservations)/);
+
+  await page.goto('/rooms');
+  await page.getByRole('button', { name: 'Add room' }).click();
+  await page.getByRole('button', { name: 'Create category' }).click();
+  await page.getByLabel('Category name').fill(categoryName);
+  await page.getByLabel('Nightly base price').fill('55000');
+  await page.getByLabel('Guest capacity').fill('2');
+  await page.getByLabel('Bed configuration').fill('1 Queen bed');
+  await page.getByLabel('Amenities').fill('Wi-Fi, Air conditioning');
+  await page.getByRole('button', { name: 'Save category' }).click();
+  const roomDialog = page.getByRole('dialog', { name: 'Add room' });
+  await expect(roomDialog.getByRole('button', { name: 'Create room' })).toBeVisible();
+  await expect(roomDialog.getByLabel('Category', { exact: true })).toHaveValue(/.+/);
+  await roomDialog.getByLabel('Room number').fill(firstRoomNumber);
+  await roomDialog.getByLabel('Floor').fill('1');
+  await roomDialog.getByRole('button', { name: 'Create room' }).click();
+  await expect(roomDialog).toBeHidden();
+  await page.getByLabel('Search', { exact: true }).fill(firstRoomNumber);
+  await expect(page.getByText(firstRoomNumber, { exact: true })).toBeVisible();
+  await page.getByLabel('Search', { exact: true }).fill('');
+
+  await page.getByRole('button', { name: 'Add room' }).click();
+  const secondRoomDialog = page.getByRole('dialog', { name: 'Add room' });
+  await secondRoomDialog.getByLabel('Room number').fill(secondRoomNumber);
+  await secondRoomDialog.getByLabel('Floor').fill('1');
+  await secondRoomDialog.getByRole('button', { name: 'Create room' }).click();
+  await page.getByLabel('Search', { exact: true }).fill(secondRoomNumber);
+  await expect(page.getByText(secondRoomNumber, { exact: true })).toBeVisible();
+  await page.getByLabel('Search', { exact: true }).fill('');
+
+  await page.goto('/guests');
+  await page.getByRole('button', { name: 'Add guest' }).click();
+  const guestDialog = page.getByRole('dialog');
+  await guestDialog.getByLabel('Full name').fill(guestName);
+  await guestDialog.getByLabel('Email').fill(email);
+  await guestDialog.getByLabel('Phone').fill('+2348000000099');
+  await guestDialog.getByLabel('Nationality').fill('Nigerian');
+  await guestDialog.getByRole('button', { name: 'Add guest' }).click();
+  await expect(page.getByRole('heading', { name: guestName })).toBeVisible();
+
+  await page.goto('/reservations/new');
+  const initialCheckIn = isoDay(2);
+  const initialCheckOut = isoDay(4);
+  await page.getByLabel('Check-in').fill(initialCheckIn);
+  await page.getByLabel('Check-out').fill(initialCheckOut);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect.poll(() => page.getByRole('radio').count()).toBeGreaterThan(0);
+  const firstAvailable = page.getByRole('radio').first();
+  const bookedRoomLabel = await firstAvailable.locator('xpath=..').innerText();
+  const bookedRoomNumber = bookedRoomLabel.match(/Room\s+([^\sÂ·]+)/)?.[1];
+  await firstAvailable.check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Search guests', { exact: true }).fill(guestName);
+  await page.getByRole('button', { name: new RegExp(guestName) }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Create reservation' }).click();
+  await expect(page.getByText('Reservation created')).toBeVisible();
+  await page.getByRole('button', { name: 'View reservation' }).click();
+  await expect(page.getByRole('heading', { name: /^HOS-/ })).toBeVisible();
+
+  const detailUrl = page.url();
+  await page.goto('/reservations/new');
+  await page.getByLabel('Check-in').fill(initialCheckIn);
+  await page.getByLabel('Check-out').fill(initialCheckOut);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect.poll(() => page.getByRole('radio').count()).toBeGreaterThan(0);
+  if (bookedRoomNumber) await expect(page.getByRole('radio').locator(`xpath=..`).filter({ hasText: `Room ${bookedRoomNumber}` })).toHaveCount(0);
+  await page.goto(detailUrl);
+  await page.getByRole('button', { name: 'Modify' }).click();
+  await page.getByRole('dialog').getByLabel('Check-in').fill(isoDay(5));
+  await page.getByRole('dialog').getByLabel('Check-out').fill(isoDay(7));
+  await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Reservation updated')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel reservation' }).click();
+  await expect(page.getByText('Reservation cancelled')).toBeVisible();
+
+  await page.goto('/reservations/walk-in');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  const walkInRoom = page.getByRole('radio').locator('xpath=..').filter({ hasText: firstRoomNumber });
+  await expect(walkInRoom).toHaveCount(1);
+  const walkInRadio = walkInRoom.getByRole('radio');
+  await walkInRadio.check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel('Search guests', { exact: true }).fill(guestName);
+  await page.getByRole('button', { name: new RegExp(guestName) }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Check in guest' }).click();
+  await expect(page.getByRole('heading', { name: 'Guest checked in' })).toBeVisible();
+
+  await page.goto('/front-desk/in-house');
+  const inHouseRow = page.getByRole('row').filter({ hasText: guestName });
+  await inHouseRow.getByRole('button', { name: 'Transfer', exact: true }).click();
+  const moveTo = page.getByLabel('Move to');
+  const transferDestination = moveTo.locator('option').filter({ hasText: secondRoomNumber });
+  await expect(transferDestination).toHaveCount(1);
+  await moveTo.selectOption(await transferDestination.getAttribute('value') ?? '');
+  await page.getByLabel('Reason').fill('Browser integration transfer');
+  await page.getByRole('button', { name: 'Transfer guest' }).click();
+  await expect(page.getByText('Room transfer complete')).toBeVisible();
+
+  await inHouseRow.getByRole('button', { name: 'Check out' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Complete check-out' }).click();
+  await expect(page.getByText('checked out', { exact: false })).toBeVisible();
+
+  await page.goto('/rooms');
+  await page.getByLabel('Search', { exact: true }).fill(firstRoomNumber);
+  const statusButton = page.getByRole('button', { name: new RegExp(`Change status of room ${firstRoomNumber}`) });
+  await expect(page.getByRole('row').filter({ hasText: firstRoomNumber }).getByText('Dirty', { exact: true })).toBeVisible();
+  await statusButton.click();
+  const statusDialog = page.getByRole('dialog');
+  await expect(statusDialog.getByLabel('Change to').locator('option[value="cleaning"]')).toHaveCount(1);
+  await statusDialog.getByLabel('Change to').selectOption('cleaning');
+  await statusDialog.getByRole('button', { name: 'Update status' }).click();
+  await expect(statusDialog).toBeHidden();
+  await statusButton.click();
+  await expect(statusDialog.getByLabel('Change to').locator('option[value="inspected"]')).toHaveCount(1);
+  await statusDialog.getByLabel('Change to').selectOption('inspected');
+  await statusDialog.getByRole('button', { name: 'Update status' }).click();
+  await expect(statusDialog).toBeHidden();
+  await statusButton.click();
+  await expect(statusDialog.getByLabel('Change to').locator('option[value="available"]')).toHaveCount(1);
+  await statusDialog.getByLabel('Change to').selectOption('available');
+  await statusDialog.getByRole('button', { name: 'Update status' }).click();
+  await expect(statusDialog).toBeHidden();
+
+  await page.reload();
+  await page.getByLabel('Search', { exact: true }).fill(secondRoomNumber);
+  const destinationRow = page.getByRole('row').filter({ hasText: secondRoomNumber });
+  await expect(destinationRow.getByText('Dirty', { exact: true })).toBeVisible();
+  await page.getByLabel('Search', { exact: true }).fill('');
+  await page.getByLabel('Search', { exact: true }).fill(firstRoomNumber);
+  await expect(page.getByText(firstRoomNumber, { exact: true })).toBeVisible();
+  await page.getByLabel('Search', { exact: true }).fill('');
+  await page.getByLabel('Search', { exact: true }).fill(secondRoomNumber);
+  await expect(page.getByText(secondRoomNumber, { exact: true })).toBeVisible();
+  await page.getByLabel('Search', { exact: true }).fill('');
+  await page.goto('/guests');
+  await page.getByLabel('Search', { exact: true }).fill(guestName);
+  await expect(page.getByRole('table').getByText(guestName, { exact: true })).toBeVisible();
+});
+

@@ -1,0 +1,22 @@
+# Security architecture
+
+## Implemented foundation
+
+Environment values are validated at startup; `.env` is ignored and `.env.example` contains placeholders only. Helmet sets HTTP security headers. CORS origins are allowlisted by `CORS_ORIGINS`. Nest throttling is enabled with configurable limits. Pino emits structured logs with correlation IDs and redacts authorization/cookie and common credential/payment request fields. Error responses do not expose stack traces. Boundary validation support and Prisma-only service access are established.
+
+The current rate limiter is process-local and is suitable only as a first deployment guardrail; use a shared GCP-compatible store before running multiple replicas. Review proxy trust, TLS termination, CSP and exact CORS origins during deployment. Avoid logging full DTOs or Prisma errors containing data. Audit metadata must be allowlisted and must never contain tokens, secrets, payment credentials or sensitive guest data by default.
+
+## Planned identity and authorization flow
+
+1. Evaluate **Auth0 Organizations as the first proof-of-concept candidate**, with Okta as an alternative for customer SSO and delegated administration requirements. Auth0 documents B2B organization membership and per-organization SSO/branding workflows; Okta documents both single-org and hub-and-spoke multi-org patterns. This is a recommendation to evaluate, not a selection: confirm enterprise federation, region/data handling, service availability, support, pricing, and automated organization lifecycle against HotelOS's central provisioning/control-plane needs before committing. [Auth0 Organizations](https://auth0.com/organizations) · [Okta multi-tenant solutions](https://developer.okta.com/docs/concepts/multi-tenancy/)
+2. Prefer an authorization-code flow with PKCE and a same-site BFF/HttpOnly Secure SameSite cookie. If browser-to-API bearer tokens are needed, request a short-lived access token for the HotelOS API audience; validate its signature using issuer discovery/JWKS with rotation, exact issuer/audience, approved algorithms and `exp`/`nbf`. Map `(iss, sub)` to an internal `UserIdentity.id`. Never trust a browser role switcher or an ID token as an API token without an explicit audience contract. Auth0 also documents that an audience-specific API token is required for an API JWT, which reinforces keeping the API audience explicit. [Auth0 access token audience](https://support.auth0.com/center/s/article/Invalid-Access-Token-Error-When-Decoding-an-Access-Token)
+3. Resolve active organization memberships for that identity. A person may belong to multiple organizations. Select an organization context only from authorized memberships; verify active status and owner/admin rules on each request.
+4. For hotel operations, verify a hotel membership or an explicitly permitted organization-wide role, and verify that the hotel belongs to the selected organization. Scope each service query by the resolved server-side tenant context.
+5. Store grants as organization/hotel memberships plus role/permission assignments. Never use one global role column as the authorization model. Recheck high-impact permissions at the use-case boundary; client-side checks are presentation only.
+6. Keep refresh credentials server-side where a BFF is used. For direct bearer access, keep access tokens short-lived, audience-restricted and narrowly scoped, and use a secure refresh/exchange flow; do not store sensitive long-lived credentials in localStorage. Token claims identify the caller and login context; HotelOS membership tables remain the authorization source.
+7. A separate control plane provisions isolated organization projects/environments and records lifecycle state. Provisioning credentials are service-to-service, least-privilege and not represented by customer user roles. Treat provisioning callbacks as authenticated, replay-resistant events.
+8. Platform administrators use a separate identity boundary and control-plane authorization. No platform admin role automatically grants access to tenant application data. Any support access should be time-bound, approved, attributable and audited.
+
+## Not implemented
+
+No identity provider, token validation, session exchange, authentication/authorization guards, organization provisioning, platform admin app, secret manager integration or audit-event persistence workflow is active yet. Existing demo credentials and frontend role simulation remain demonstration-only.

@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — single source of truth (space-separated RGB channels for alpha support) */
+:root {
+  --forest: 23 37 31;      /* #17251F */
+  --deep: 36 58 48;        /* #243A30 */
+  --champagne: 196 165 116; /* #C4A574 */
+  --ivory: 245 242 236;    /* #F5F2EC */
+  --slate: 101 113 106;    /* #65716A */
+  --line: 231 227 218;     /* #E7E3DA */
+  --success: 63 122 90;
+  --warning: 196 134 30;
+  --danger: 168 62 56;
+  --info: 84 112 133;
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-ivory font-sans text-body text-forest antialiased; }
+  h1, h2, h3, h4 { @apply font-heading tracking-tight; }
+  :focus-visible { outline: 2px solid rgb(var(--forest)); outline-offset: 2px; box-shadow: 0 0 0 4px rgb(var(--champagne)); }
+}
+
+/* Shared button foregrounds override inherited page colors and accidental utilities. */
+button[data-button-variant='primary'], button[data-button-variant='danger'] { color: #fff !important; }
+button[data-button-variant='accent'], button[data-button-variant='secondary'], button[data-button-variant='ghost'] { color: #17251F !important; }
+button[data-button-variant='primary']:disabled, button[data-button-variant='danger']:disabled { background-color: #65716A !important; color: #fff !important; }
+button[data-button-variant='accent']:disabled { color: #17251F !important; }
+button[data-button-variant='secondary']:disabled, button[data-button-variant='ghost']:disabled { color: #65716A !important; }
+button[data-button-variant] svg { color: currentColor; }
+:is(.bg-forest, .bg-deep) button[data-button-variant='primary']:not(:disabled) { background-color: #C4A574 !important; color: #17251F !important; }
+:is(.bg-forest, .bg-deep) button[data-button-variant='primary']:not(:disabled):hover { background-color: #D2B990 !important; }
+:is(.bg-forest, .bg-deep) button[data-button-variant='ghost'] { color: #FFFFFF !important; }
+:is(.bg-forest, .bg-deep) button[data-button-variant='ghost']:hover { background-color: rgb(255 255 255 / 0.12) !important; }
+:is(.bg-forest, .bg-deep) button[data-button-variant='ghost']:disabled { color: #FFFFFF !important; }
+
+@layer utilities {
+  .tnum { font-variant-numeric: tabular-nums; }
+}
+
+/* FullCalendar theming */
+.fc {
+  --fc-border-color: rgb(var(--line));
+  --fc-today-bg-color: rgb(var(--champagne) / 0.14);
+  --fc-page-bg-color: #fff;
+  --fc-button-bg-color: rgb(var(--forest));
+  --fc-button-border-color: rgb(var(--forest));
+  --fc-button-hover-bg-color: rgb(var(--deep));
+  --fc-button-hover-border-color: rgb(var(--deep));
+  --fc-button-active-bg-color: rgb(var(--deep));
+  --fc-button-active-border-color: rgb(var(--deep));
+  font-size: 13px;
+}
+.fc .fc-toolbar-title { font-family: 'DM Sans', system-ui, sans-serif; font-size: 18px; font-weight: 600; }
+.fc .fc-toolbar { flex-wrap: wrap; gap: 8px; }
+.fc .fc-event { cursor: pointer; }
+
+/* Print: only the invoice / receipt inside a .print-area is printed */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+  .report-print, .report-print * { visibility: visible; }
+  .report-print { position: absolute; left: 0; top: 0; width: 100%; padding: 12px; background: #fff; }
+  .report-print button, .report-print input, .report-print select { display: none !important; }
+  body > div.fixed { position: static !important; }
+  [role="dialog"] { position: static !important; transform: none !important; max-height: none !important; width: 100% !important; max-width: none !important; box-shadow: none !important; }
+  [role="dialog"], [role="dialog"] * { overflow: visible !important; }
+  .no-print { display: none !important; }
+}
+
+/* Guest website and portal: a distinct hospitality-facing treatment, sharing HotelOS tokens. */
+.guest-eyebrow { @apply text-xs font-semibold uppercase tracking-[.2em] text-champagne; }
+.guest-nav { @apply min-h-10 inline-flex items-center text-sm font-medium text-forest/80 transition-colors hover:text-forest; }
+.guest-nav.active { @apply text-forest underline decoration-champagne decoration-2 underline-offset-8; }
+.guest-search { @apply bg-white; }
+@media (max-width: 640px) {
+  .guest-search { @apply p-4; }
+}
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+  .no-print { display: none !important; }
+}

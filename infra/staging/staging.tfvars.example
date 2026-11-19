@@ -1,0 +1,15 @@
+project_id                       = "replace-with-approved-staging-project"
+region                           = "africa-south1"
+organization_id                  = "replace-with-existing-organization-uuid"
+api_image                        = "africa-south1-docker.pkg.dev/PROJECT/REPOSITORY/hotelos-api@sha256:REPLACE"
+frontend_origin                  = "https://staging.example.com"
+api_public_invoker               = false
+sql_tier                         = "db-custom-1-3840"
+sql_availability_type            = "ZONAL"
+database_url_secret_id           = "hotelos-staging-database-url"
+smtp_user_secret_id              = "hotelos-staging-smtp-user"
+smtp_password_secret_id          = "hotelos-staging-smtp-password"
+smtp_host                        = "smtp.example.com"
+email_from                       = "HotelOS <no-reply@example.com>"
+minimum_cloud_run_instances      = 0
+maximum_cloud_run_instances      = 3

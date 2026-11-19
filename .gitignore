@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+service-account*.json
+*serviceAccount*.json
+firebase-adminsdk*.json
+
+# Build outputs
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# Local databases and backups
+*.dump
+*.backup
+*.sql.gz
+*.sqlite
+*.sqlite3
+
+# Terraform state and local variables
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# Editor and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

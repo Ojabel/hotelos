@@ -1,0 +1,9 @@
+import { Link } from 'react-router-dom';
+import { MapPin, Phone } from 'lucide-react';
+import { mockHotels } from '@/data/mockHotels';
+import { useAdminStore } from '@/store/useAdminStore';
+
+export function GuestFooter() {
+  const profile = useAdminStore((s) => s.settings.profile);
+  return <footer id="contact" className="bg-forest text-white"><div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:grid-cols-2 md:px-8 lg:grid-cols-4"><div><p className="font-heading text-xl">{profile.name}</p><p className="mt-3 max-w-xs text-sm leading-6 text-white/70">{profile.description}</p></div><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-champagne">Our hotels</p><ul className="mt-4 space-y-2 text-sm text-white/75">{mockHotels.map((hotel) => <li key={hotel.id}>{hotel.name} · {hotel.city}</li>)}</ul></div><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-champagne">Get in touch</p><p className="mt-4 flex gap-2 text-sm text-white/75"><MapPin className="h-4 w-4 shrink-0" />{profile.address}, {profile.city}</p><a className="mt-2 flex gap-2 text-sm text-white/75 hover:text-white" href={`tel:${profile.phone}`}><Phone className="h-4 w-4" />{profile.phone}</a><a className="mt-2 block text-sm text-white/75 hover:text-white" href={`mailto:${profile.email}`}>{profile.email}</a></div><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-champagne">Explore</p><div className="mt-4 flex flex-col items-start gap-2 text-sm text-white/75"><Link to="/guest-site/rooms">Rooms &amp; suites</Link><Link to="/guest-portal">Guest portal</Link><Link to="/guest-site">Hotel information</Link></div></div></div><div className="border-t border-white/15 px-5 py-4 text-center text-xs text-white/55">HotelOS demonstration website · Reservations and services shown here are simulated.</div></footer>;
+}

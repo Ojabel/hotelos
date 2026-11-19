@@ -1,0 +1,15 @@
+ALTER TYPE "MembershipStatus" ADD VALUE 'REVOKED';
+
+ALTER TABLE "UserIdentity"
+ADD COLUMN "emailVerified" BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE "OrganizationMembership"
+ADD COLUMN "invitedAt" TIMESTAMPTZ(6),
+ADD COLUMN "activatedAt" TIMESTAMPTZ(6),
+ADD COLUMN "suspendedAt" TIMESTAMPTZ(6),
+ADD COLUMN "revokedAt" TIMESTAMPTZ(6);
+
+ALTER TABLE "HotelMembership"
+ADD COLUMN "activatedAt" TIMESTAMPTZ(6),
+ADD COLUMN "suspendedAt" TIMESTAMPTZ(6),
+ADD COLUMN "revokedAt" TIMESTAMPTZ(6);
